@@ -34,6 +34,12 @@ function buildUnfoldCubeGeometry(unit = 1, subdiv = 2) {
   const hinge2Origin: number[] = [];
   const hinge2Axis: number[] = [];
   const hinge2Angle: number[] = [];
+  // Normalised distance (0..1) of each vertex from the centre of the flat
+  // cross. Used by the vertex shader to drive a radial reveal wavefront so
+  // edges appear "one ring at a time" from the middle outward.
+  const radialDist: number[] = [];
+  // Farthest point on the cross is the outer TOP corner at (±0.5, 2.5).
+  const MAX_CROSS_DIST = Math.hypot(0.5, 2.5);
 
   let vertOffset = 0;
 
@@ -62,6 +68,7 @@ function buildUnfoldCubeGeometry(unit = 1, subdiv = 2) {
         hinge2Origin.push(h2Origin[0] * unit, h2Origin[1] * unit, h2Origin[2] * unit);
         hinge2Axis.push(h2Axis[0], h2Axis[1], h2Axis[2]);
         hinge2Angle.push(h2Angle);
+        radialDist.push(Math.hypot(x, y) / MAX_CROSS_DIST);
       }
     }
     for (let j = 0; j < subdiv; j += 1) {
@@ -110,6 +117,7 @@ function buildUnfoldCubeGeometry(unit = 1, subdiv = 2) {
   geom.setAttribute("aHinge2Origin", new Float32BufferAttribute(hinge2Origin, 3));
   geom.setAttribute("aHinge2Axis", new Float32BufferAttribute(hinge2Axis, 3));
   geom.setAttribute("aHinge2Angle", new Float32BufferAttribute(hinge2Angle, 1));
+  geom.setAttribute("aRadialDist", new Float32BufferAttribute(radialDist, 1));
   geom.setIndex(indices);
   return geom;
 }
@@ -125,6 +133,7 @@ const VERTEX_SHADER = /* glsl */ `
   attribute vec3 aHinge2Origin;
   attribute vec3 aHinge2Axis;
   attribute float aHinge2Angle;
+  attribute float aRadialDist;  // 0 at cross centre, 1 at farthest TOP corner
 
   uniform float u_time;
   uniform float u_seed;
@@ -132,7 +141,8 @@ const VERTEX_SHADER = /* glsl */ `
   uniform float u_pointSize;
 
   varying vec2 vUv;
-  varying float vProgress;
+  varying float vProgress;      // fold progress (0 flat, 1 folded cube)
+  varying float vEdgeAmount;    // this vertex's wireframe visibility (0..1)
   varying float vFaceFold;
 
   // Rodrigues' rotation formula: rotate point p around axis (through origin).
@@ -144,14 +154,41 @@ const VERTEX_SHADER = /* glsl */ `
     return origin + rotated;
   }
 
+  // One full cycle is split into stages:
+  //   0.00–0.20  points (flat) → edges appear        reveal↑  fade=1  fold=0
+  //              ↳ radial wavefront from centre outward
+  //   0.20–0.35  edges flat (hold)                   reveal=1 fade=1  fold=0
+  //   0.35–0.50  edges fold into 3D cube             reveal=1 fade=1  fold↑
+  //   0.50–0.65  folded hold, edges fade out         reveal=1 fade↓   fold=1
+  //   0.65–0.85  points un-fold back to flat UV      reveal→0 fade=0  fold↓
+  //   0.85–1.00  points (flat) hold before looping   reveal=0 fade=0  fold=0
+  // Period matches the old sin cycle (2π / u_speed).
+  const float TAU = 6.2831853;
+
   void main() {
     float t = u_time * u_speed + u_seed;
-    // 0 = flat UV cross, 1 = fully folded 3D cube
-    float progress = sin(t) * 0.5 + 0.5;
+    float cycleT = fract(t / TAU);
+
+    // 1) Radial reveal front: 0 at cycleT=0, grows to 1 by cycleT=0.2.
+    //    Stays at 1 through the rest of the "edges exist" phases.
+    float revealFront = smoothstep(0.0, 0.2, cycleT);
+    // 2) Overall edge fade: holds 1 until 0.5, then fades to 0 by 0.65.
+    float edgeFade = 1.0 - smoothstep(0.5, 0.65, cycleT);
+    // 3) Fold: 0→1 on [0.35, 0.5], hold folded, 1→0 on [0.65, 0.85].
+    float foldProgress = smoothstep(0.35, 0.5, cycleT) - smoothstep(0.65, 0.85, cycleT);
+
+    // Per-vertex wavefront: a vertex becomes visible once the expanding
+    // reveal front passes its aRadialDist. Small smoothing band gives a
+    // soft "ring" edge instead of a hard step.
+    float band = 0.12;
+    float halfBand = band * 0.5;
+    float reach = revealFront * (1.0 + band);
+    float wavefront = 1.0 - smoothstep(reach - halfBand, reach + halfBand, aRadialDist);
+    vEdgeAmount = wavefront * edgeFade;
 
     vec3 p = position;
 
-    float angle1 = aHingeAngle * progress;
+    float angle1 = aHingeAngle * foldProgress;
     p = rotateAxis(p, aHingeOrigin, aHingeAxis, angle1);
 
     // secondary hinge (e.g. TOP face cascading off BACK): its origin/axis
@@ -159,7 +196,7 @@ const VERTEX_SHADER = /* glsl */ `
     if (abs(aHinge2Angle) > 0.0001) {
       vec3 h2o = rotateAxis(aHinge2Origin, aHingeOrigin, aHingeAxis, angle1);
       vec3 h2a = rotateAxis(aHinge2Axis, vec3(0.0), aHingeAxis, angle1);
-      float angle2 = aHinge2Angle * progress;
+      float angle2 = aHinge2Angle * foldProgress;
       p = rotateAxis(p, h2o, h2a, angle2);
     }
 
@@ -169,7 +206,7 @@ const VERTEX_SHADER = /* glsl */ `
     p.z += sin(t * 0.45) * 0.06;
 
     vUv = uv;
-    vProgress = progress;
+    vProgress = foldProgress;
     // amount this face actually folds (0 for the anchor, 1 for a moving face)
     vFaceFold = clamp(abs(aHingeAngle) / 1.5708, 0.0, 1.0);
 
@@ -187,6 +224,7 @@ const FRAGMENT_SHADER_MESH = /* glsl */ `
 
   varying vec2 vUv;
   varying float vProgress;
+  varying float vEdgeAmount;
   varying float vFaceFold;
 
   void main() {
@@ -204,7 +242,10 @@ const FRAGMENT_SHADER_MESH = /* glsl */ `
     // hint of "hinge stress" colouring on moving faces mid-fold
     col += u_color * vFaceFold * (1.0 - abs(vProgress - 0.5) * 2.0) * 0.15;
 
-    gl_FragColor = vec4(col, u_opacity);
+    // vEdgeAmount rises radially from the centre outward, then fades together
+    // during the 3D "hold" stage — so a fragment is lit only once the
+    // wavefront has reached its vertex.
+    gl_FragColor = vec4(col, u_opacity * vEdgeAmount);
   }
 `;
 
@@ -213,6 +254,7 @@ const FRAGMENT_SHADER_POINTS = /* glsl */ `
   uniform float u_opacity;
 
   varying float vProgress;
+  varying float vEdgeAmount;
 
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
@@ -220,9 +262,12 @@ const FRAGMENT_SHADER_POINTS = /* glsl */ `
     if (d > 0.5) discard;
     float core = smoothstep(0.5, 0.0, d);
 
-    float show3D = smoothstep(0.55, 1.0, vProgress);
-    float showFlat = (1.0 - smoothstep(0.0, 0.4, vProgress)) * 0.35;
-    gl_FragColor = vec4(u_color, core * (show3D + showFlat) * u_opacity);
+    // A vertex is visible whenever its edge is NOT visible. Since vEdgeAmount
+    // rises radially (centre first), inner points dim out first while outer
+    // points stay bright until the wavefront reaches them.
+    float pointsOnly = 1.0 - vEdgeAmount;
+    float alpha = core * pointsOnly * u_opacity;
+    gl_FragColor = vec4(u_color, alpha);
   }
 `;
 
@@ -304,7 +349,15 @@ export function FloatingGeometry({
 
   return (
     <group position={position}>
-      <mesh>
+      {/*
+        frustumCulled={false}: the vertex shader drifts + folds vertices well
+        past the static geometry's bounding sphere. Three.js culls from that
+        static sphere, so on narrow viewports (mobile) it wrongly decides the
+        object is off-screen and the whole shape pops out. Disabling culling
+        is the cheapest fix and the per-frame cost of 2 small draws is
+        negligible.
+      */}
+      <mesh frustumCulled={false}>
         <primitive object={geometry} attach="geometry" />
         <shaderMaterial
           ref={meshMatRef}
@@ -318,7 +371,7 @@ export function FloatingGeometry({
           side={DoubleSide}
         />
       </mesh>
-      <points>
+      <points frustumCulled={false}>
         <primitive object={geometry} attach="geometry" />
         <shaderMaterial
           ref={pointsMatRef}

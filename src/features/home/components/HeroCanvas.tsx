@@ -115,7 +115,7 @@ export function HeroCanvas({
       }}
     >
       <Canvas
-        camera={{ position: [0, 0, 5], fov: 55, near: 0.1, far: 50 }}
+        camera={{ position: [0, 0, 5], fov: 55, near: 0.04, far: 50 }}
         dpr={[1, 1.75]}
         gl={{ antialias: true, alpha: false }}
         style={{ position: "absolute", inset: 0 }}

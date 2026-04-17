@@ -1,0 +1,705 @@
+/* ───────────────────────────────────────────────
+   Hero cinematic intro (one-shot, self-contained)
+
+   Requested sequence:
+     1) full black
+     2) black fade + title emission
+     3) spread from title + full glitch + scanlines
+     4) whiteout
+     5) contraction toward title + settle to normal
+
+   Driven by JS-written CSS variables on `.hero-intro`:
+     --intro-black       black curtain opacity
+     --intro-hole        legacy reveal radius (kept for compatibility)
+     --intro-title       title visibility
+     --intro-title-glitch text-shaped glitch intensity
+     --intro-glow        emission intensity
+     --intro-aura        aura spread amount (expand/contract without scaling text)
+     --intro-glitch      global glitch intensity
+     --intro-return-glitch full-screen glitch burst while returning
+     --intro-scan        scanline intensity
+     --intro-flash       whiteout intensity
+
+   Removing <HeroIntro /> from HeroSection safely disables everything:
+   no selectors below affect the hero when the component is unmounted.
+   ─────────────────────────────────────────────── */
+.hero-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+  /* Promote the whole intro to its own compositing layer so the overlay
+     layers composite on GPU without touching the hero's layout. */
+  transform: translateZ(0);
+  isolation: isolate;
+}
+
+/* Avoid blanket will-change on every layer — it forces extra compositor
+   layers for static sheets like __black. Animated children set their own
+   hints where needed (__noise, __title-scan::before, etc.). */
+.hero-intro__layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Solid black curtain. An elliptical radial mask carves a title-shaped hole
+   as --intro-hole grows, so the title area shows through while the rest
+   remains pitch-black. The full curtain fades out only during the final
+   "all↓" stage via --intro-black. */
+.hero-intro__black {
+  background: #000;
+  opacity: var(--intro-black, 0);
+}
+
+/* Text-shaped emitter: CHOI/HONGSU glyphs are the actual light source. */
+.hero-intro__title-emitter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 1.5rem max(9vh, 3.5rem);
+}
+
+.hero-intro__emit-wrap {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  max-width: 1180px;
+  position: relative;
+  pointer-events: none;
+}
+
+/* Reserve the same lower block footprint (tagline + subtagline + actions)
+   that exists in the real hero overlay, so the intro title baseline aligns
+   with the runtime title instead of dropping too low. */
+.hero-intro__emit-spacer {
+  height: clamp(5.9rem, 10.8vw, 8.8rem);
+}
+
+.hero-intro__emit {
+  margin: 0;
+  position: absolute;
+  inset: 0 auto auto 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.hero-intro__emit-line {
+  display: block;
+}
+
+.hero-intro__emit--core {
+  position: relative;
+  opacity: calc(var(--intro-title, 0) * 0.22 + var(--intro-title-glitch, 0) * 0.96);
+  color: rgba(242, 249, 255, 0.96);
+  text-shadow:
+    0 0 6px rgba(215, 245, 255, 0.55),
+    0 0 16px rgba(170, 225, 255, 0.52),
+    3px 0 0 rgba(255, 95, 186, calc(var(--intro-title-glitch, 0) * 0.65)),
+    -3px 0 0 rgba(110, 225, 255, calc(var(--intro-title-glitch, 0) * 0.65));
+}
+
+/* Reuse the same title glitch stack used in runtime hover/background pulse.
+   We only gate its visibility with --intro-title-glitch. */
+.hero-intro__emit--core .hero-assemble__line.is-settled::before,
+.hero-intro__emit--core .hero-assemble__line.is-settled::after,
+.hero-intro__emit--core .hero-assemble__line.is-swapping::before,
+.hero-intro__emit--core .hero-assemble__line.is-swapping::after {
+  opacity: calc(0.95 * var(--intro-title-glitch, 0));
+}
+
+.hero-intro__emit--core.hero-assemble.is-hovered,
+.hero-intro__emit--core.hero-assemble.is-swap-glitch {
+  animation-duration: 150ms;
+}
+
+.hero-intro__emit--near .hero-assemble__line::before,
+.hero-intro__emit--near .hero-assemble__line::after,
+.hero-intro__emit--far .hero-assemble__line::before,
+.hero-intro__emit--far .hero-assemble__line::after {
+  display: none;
+}
+
+.hero-intro__emit--near {
+  opacity: calc(var(--intro-glow, 0) * 0.88);
+  filter: blur(calc(8px + var(--intro-aura, 0) * 16px));
+  text-shadow: 0 0 30px rgba(190, 235, 255, 0.8);
+}
+
+.hero-intro__emit--far {
+  opacity: calc(var(--intro-glow, 0) * 0.7);
+  filter: blur(calc(18px + var(--intro-aura, 0) * 44px));
+  text-shadow:
+    0 0 120px rgba(170, 220, 255, 0.65),
+    0 0 220px rgba(170, 220, 255, 0.45);
+}
+
+/* Global spread wash driven by the text emitter intensity.
+   Intentionally non-circular to avoid "spotlight" look. */
+.hero-intro__glow {
+  opacity: calc(var(--intro-glow, 0) * 0.38);
+  mix-blend-mode: screen;
+  background: linear-gradient(
+    180deg,
+    rgba(190, 225, 255, 0.24) 0%,
+    rgba(205, 235, 255, 0.36) 38%,
+    rgba(220, 244, 255, 0.4) 62%,
+    rgba(180, 220, 255, 0.22) 100%
+  );
+}
+
+/* Global glitch wash. */
+.hero-intro__glitch {
+  opacity: calc(var(--intro-glitch, 0) * 0.9 + var(--intro-return-glitch, 0) * 1.55);
+  mix-blend-mode: screen;
+  background:
+    /* Stage-5-only chunky vertical bands. Alpha is gated on
+       --intro-return-glitch, so at all other times this layer contributes
+       nothing and the thin stripes below remain dominant. */
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0) 8px,
+      rgba(255, 255, 255, calc(var(--intro-return-glitch, 0) * 0.38)) 8px,
+      rgba(255, 255, 255, calc(var(--intro-return-glitch, 0) * 0.38)) 22px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0) 0 2px,
+      rgba(255, 255, 255, 0.26) 2px 4px
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.1) 28%,
+      rgba(255, 255, 255, 0.24) 49%,
+      rgba(255, 255, 255, 0.1) 70%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  animation: hero-intro-return-shudder 78ms steps(2) infinite;
+}
+
+.hero-intro__scanlines {
+  opacity: calc(var(--intro-scan, 0) * 0.95 + var(--intro-return-glitch, 0) * 1.1);
+  mix-blend-mode: screen;
+  background:
+    /* Stage-4 thick bands — split into two intensities so the overall
+       white area reads ~70 % light + ~30 % dense (instead of the old
+       uniform 0.42 alpha that came across as too bright).
+       Layer 1 below is the BASE: every 17px band painted at a LIGHT
+       alpha (~0.13). Layer 2 is a DENSE overlay at 51px period (1 in
+       every 3 bands), which screen-blends on top of the base to push
+       those specific bands back up to ~0.38 effective alpha — close to
+       the previous look but reserved for 1/3 of bands.
+       Net: 33 % bands ≈ 0.38 dense, 67 % bands ≈ 0.13 light, weighted
+       average brightness roughly half of the previous setting. */
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0) 7px,
+      rgba(255, 255, 255, calc(var(--intro-return-glitch, 0) * 0.13)) 7px,
+      rgba(255, 255, 255, calc(var(--intro-return-glitch, 0) * 0.13)) 17px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0) 7px,
+      rgba(255, 255, 255, calc(var(--intro-return-glitch, 0) * 0.29)) 7px,
+      rgba(255, 255, 255, calc(var(--intro-return-glitch, 0) * 0.29)) 17px,
+      rgba(255, 255, 255, 0) 17px,
+      rgba(255, 255, 255, 0) 51px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0) 2px,
+      rgba(255, 255, 255, 0.13) 2px,
+      rgba(255, 255, 255, 0.13) 3px
+    );
+  animation: hero-intro-scan-drift 64ms steps(2) infinite;
+}
+
+/* Irregular dark scan bands — THE close-in mechanism.
+   Three stacked repeating patterns with coprime periods (37 / 53 / 71 px)
+   and DIFFERENT phase offsets so their black bands never line up
+   periodically. At --intro-close-depth = 0 each pattern has a thin band
+   (~5–7 px) at its own offset within the period, giving ~30 % total black
+   coverage with no visible regularity. As --intro-close-depth grows
+   toward 1, every pattern's band widens to fill its entire period, and
+   the three stacked multiply-black layers collapse the whole viewport to
+   solid black — the "black scanlines irregularly grow until everything
+   is black" transition the user asked for.
+   Opacity is driven by --intro-scan-dark (its own curve), not
+   --intro-return-glitch, because we need this layer to STAY at full
+   strength through the close-in even after returnGlitch has faded. */
+.hero-intro__scanlines-dark {
+  opacity: var(--intro-scan-dark, 0);
+  mix-blend-mode: multiply;
+  background:
+    /* Layer A — 37px period, band anchored at the top (0 → grows down). */
+    repeating-linear-gradient(
+      to bottom,
+      #000 0,
+      #000 calc(5px + 32px * var(--intro-close-depth, 0)),
+      transparent calc(5px + 32px * var(--intro-close-depth, 0)),
+      transparent 37px
+    ),
+    /* Layer B — 53px period, band phased to the middle (22-27 → grows both ways). */
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(22px - 22px * var(--intro-close-depth, 0)),
+      #000 calc(22px - 22px * var(--intro-close-depth, 0)),
+      #000 calc(27px + 26px * var(--intro-close-depth, 0)),
+      transparent calc(27px + 26px * var(--intro-close-depth, 0)),
+      transparent 53px
+    ),
+    /* Layer C — 71px period, band phased near the bottom (48-55 → grows both ways). */
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(48px - 48px * var(--intro-close-depth, 0)),
+      #000 calc(48px - 48px * var(--intro-close-depth, 0)),
+      #000 calc(55px + 16px * var(--intro-close-depth, 0)),
+      transparent calc(55px + 16px * var(--intro-close-depth, 0)),
+      transparent 71px
+    );
+  animation: hero-intro-scan-drift 64ms steps(2) infinite;
+}
+
+/* Additional title-focused scan beam to emphasize the name itself. */
+.hero-intro__title-scan {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 58%;
+  bottom: 15%;
+  overflow: hidden;
+  mix-blend-mode: screen;
+  opacity: var(--intro-scan, 0);
+  pointer-events: none;
+  will-change: opacity;
+}
+
+/* Return-stage full-screen violent glitch burst (no circular hotspot).
+   Opacity gates on --intro-return-glitch, so this element is only visible
+   during stage 5 — we can hard-code chunky bands here instead of stacking
+   extra gradient layers. */
+.hero-intro__return-burst {
+  opacity: calc(var(--intro-return-glitch, 0) * 1.35);
+  mix-blend-mode: screen;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(90, 230, 255, 0.26) 0%,
+      rgba(255, 255, 255, 0) 30%,
+      rgba(255, 90, 190, 0.24) 65%,
+      rgba(255, 255, 255, 0.06) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0) 0 9px,
+      rgba(255, 255, 255, 0.22) 9px 16px
+    );
+  filter:
+    contrast(calc(1 + var(--intro-return-glitch, 0) * 1.1))
+    saturate(calc(1 + var(--intro-return-glitch, 0) * 0.8));
+  animation: hero-intro-return-burst 72ms steps(2) infinite;
+}
+
+/* Low-cost stage-4 noise — no feTurbulence / no per-pixel shader.
+   (1) Tiled "grain": two orthogonal 2px repeating lines at very low
+       alpha — reads as fine film grain when tiled across the viewport.
+   (2) Fake line noise: two angled repeating-linear-gradient passes with
+       irregular stop spacing — breaks up the regular micro-grid.
+   Opacity is driven by --intro-return-glitch AND a 0.04↔0.12 pulse
+   (steps(2)) so the layer only breathes during the return-glitch window.
+   mix-blend-mode: soft-light keeps the effect subtle on black while still
+   biting into bright scanlines. */
+.hero-intro__noise {
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  will-change: opacity, background-position;
+  background-image:
+    /* grain tile — horizontal micro-lines */
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 1px,
+      rgba(255, 255, 255, 0.055) 1px,
+      rgba(255, 255, 255, 0.055) 2px
+    ),
+    /* grain tile — vertical micro-lines */
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent 1px,
+      rgba(0, 0, 0, 0.06) 1px,
+      rgba(0, 0, 0, 0.06) 2px
+    ),
+    /* line-noise pass A */
+    repeating-linear-gradient(
+      108deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0) 5px,
+      rgba(255, 255, 255, 0.06) 5px,
+      rgba(255, 255, 255, 0.06) 6px,
+      rgba(255, 255, 255, 0) 6px,
+      rgba(255, 255, 255, 0) 15px
+    ),
+    /* line-noise pass B */
+    repeating-linear-gradient(
+      -14deg,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0) 3px,
+      rgba(0, 0, 0, 0.075) 3px,
+      rgba(0, 0, 0, 0.075) 4px,
+      rgba(0, 0, 0, 0) 4px,
+      rgba(0, 0, 0, 0) 12px
+    );
+  background-size:
+    2px 2px,
+    2px 2px,
+    220% 140%,
+    160% 180%;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+  background-repeat: repeat, repeat, repeat, repeat;
+  opacity: calc(var(--intro-return-glitch, 0) * 0.08);
+  animation:
+    hero-intro-noise-pulse 168ms steps(2) infinite,
+    hero-intro-noise-drift 312ms steps(3) infinite;
+}
+
+@keyframes hero-intro-noise-pulse {
+  0%,
+  100% {
+    opacity: calc(var(--intro-return-glitch, 0) * 0.04);
+  }
+  50% {
+    opacity: calc(var(--intro-return-glitch, 0) * 0.12);
+  }
+}
+
+@keyframes hero-intro-noise-drift {
+  0%,
+  100% {
+    background-position: 0 0, 0 0, 0 0, 4px -3px;
+  }
+  33% {
+    background-position: 1px 0, 0 1px, -6px 2px, -3px 5px;
+  }
+  66% {
+    background-position: 0 1px, 1px 0, 3px -4px, 2px -2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-intro__noise {
+    animation: none;
+    opacity: calc(var(--intro-return-glitch, 0) * 0.08);
+    background-position: 0 0, 0 0, 0 0, 0 0;
+  }
+}
+
+/* Stage-4-only "glitch vignette" — aggressive edition.
+   A plain circular vignette reads as photo processing; here we instead
+   darken each of the four SIDES with a linear gradient AND pile asymmetric
+   corner radials on top so mid-edges, corners, and the overall frame all
+   get chewed toward black simultaneously. The bottom corner radials are
+   deliberately small (55% / 60%) so the centre-bottom title area stays
+   readable — everything that matters on screen during the plateau is the
+   title, so we protect that zone and let the rest go dark.
+   A 90ms step(2) jitter on transform keeps the frame unstable, so the
+   dark border reads as part of the glitch rather than a static vignette. */
+.hero-intro__return-vignette {
+  opacity: var(--intro-return-glitch, 0);
+  /* Composite vignette mixing two visual registers on purpose:
+       (A) Soft-alpha side + corner darkening for a traditional vignette
+           feel on the 4 edges (no hard cut — the emission bleeds into
+           black via gradient fades).
+       (B) Hard-cut, thin horizontal strikes (0.8 – 2 % viewport height,
+           2 – 44 % long) shooting in from the left and right edges at
+           irregular y positions. These stay crisp so they read as
+           scanlines being cut / broken at specific rows rather than
+           extensions of the soft vignette.
+     A is sized 100% 100% / positioned 0 0 to cover the viewport; B uses
+     per-layer sizes and positions. The jitter animation translates and
+     scales the whole element every 45 ms; the soft fades re-blur each
+     frame while the hard strikes visibly snap. */
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-image:
+    /* (A1) Horizontal edge darkener — soft */
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.6) 8%,
+      rgba(0, 0, 0, 0) 22%,
+      rgba(0, 0, 0, 0) 78%,
+      rgba(0, 0, 0, 0.6) 92%,
+      rgba(0, 0, 0, 0.95) 100%
+    ),
+    /* (A2) Vertical edge darkener — soft */
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.92) 0%,
+      rgba(0, 0, 0, 0.55) 8%,
+      rgba(0, 0, 0, 0) 22%,
+      rgba(0, 0, 0, 0) 80%,
+      rgba(0, 0, 0, 0.45) 92%,
+      rgba(0, 0, 0, 0.8) 100%
+    ),
+    /* (A3) Corner softeners — asymmetric ellipses, no hard cut */
+    radial-gradient(
+      ellipse 62% 52% at 0% 0%,
+      rgba(0, 0, 0, 0.85) 0%,
+      rgba(0, 0, 0, 0.4) 40%,
+      transparent 80%
+    ),
+    radial-gradient(
+      ellipse 72% 56% at 100% 0%,
+      rgba(0, 0, 0, 0.82) 0%,
+      rgba(0, 0, 0, 0.38) 42%,
+      transparent 82%
+    ),
+    radial-gradient(
+      ellipse 48% 42% at 0% 100%,
+      rgba(0, 0, 0, 0.8) 0%,
+      rgba(0, 0, 0, 0.35) 40%,
+      transparent 78%
+    ),
+    radial-gradient(
+      ellipse 54% 46% at 100% 100%,
+      rgba(0, 0, 0, 0.82) 0%,
+      rgba(0, 0, 0, 0.38) 42%,
+      transparent 80%
+    ),
+    /* (B) Normal strikes (16) — 0.8–2 % tall, 5–44 % long.
+       8 left + 8 right. */
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    /* (B) Medium strikes (6) — 2.2–3.2 % tall.
+       3 left + 3 right. */
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    /* (B) Ultra-thin strikes (24) — 0.3–0.6 % tall, 3–26 % long.
+       12 left + 12 right. */
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000),
+    linear-gradient(#000, #000), linear-gradient(#000, #000);
+  background-size:
+    /* (A) soft fades — full viewport */
+    100% 100%, 100% 100%,
+    100% 100%, 100% 100%, 100% 100%, 100% 100%,
+    /* (B) normal — 8 left */
+    38% 1.5%, 17% 2%, 44% 1.2%, 10% 1.8%,
+    27% 2%, 13% 1.3%, 34% 1.5%, 21% 1.3%,
+    /* (B) normal — 8 right */
+    19% 1.5%, 41% 2%, 14% 1%, 28% 1.8%,
+    5% 1.2%, 22% 1.5%, 36% 2%, 7% 1%,
+    /* (B) medium — 3 left + 3 right */
+    19% 2.5%, 8% 2.8%, 31% 2.2%,
+    12% 3%, 28% 2.5%, 7% 3.2%,
+    /* (B) ultra-thin — 12 left */
+    14% 0.5%, 4% 0.4%, 26% 0.6%, 9% 0.4%,
+    18% 0.5%, 7% 0.4%, 24% 0.6%, 3% 0.3%,
+    16% 0.5%, 11% 0.4%, 6% 0.3%, 21% 0.6%,
+    /* (B) ultra-thin — 12 right */
+    24% 0.6%, 3% 0.3%, 11% 0.4%, 7% 0.4%,
+    15% 0.5%, 5% 0.3%, 16% 0.5%, 10% 0.4%,
+    8% 0.3%, 13% 0.5%, 18% 0.6%, 6% 0.4%;
+  background-position:
+    /* (A) soft fades */
+    0 0, 0 0,
+    0 0, 0 0, 0 0, 0 0,
+    /* (B) normal — left, x anchored at 0 %, y off-grid */
+    0% 3%, 0% 16%, 0% 29%, 0% 37%,
+    0% 58%, 0% 67%, 0% 81%, 0% 94%,
+    /* (B) normal — right, x anchored at 100 %, y off-grid */
+    100% 7%, 100% 21%, 100% 39%, 100% 51%,
+    100% 62%, 100% 74%, 100% 84%, 100% 91%,
+    /* (B) medium — left + right */
+    0% 23%, 0% 43%, 0% 72%,
+    100% 13%, 100% 47%, 100% 78%,
+    /* (B) ultra-thin — left (12) */
+    0% 5%, 0% 9%, 0% 12.5%, 0% 18%,
+    0% 20.5%, 0% 26%, 0% 33.5%, 0% 40%,
+    0% 46.5%, 0% 53%, 0% 60.5%, 0% 76.5%,
+    /* (B) ultra-thin — right (12) */
+    100% 4%, 100% 10.5%, 100% 15%, 100% 27%,
+    100% 30.5%, 100% 35%, 100% 44%, 100% 54.5%,
+    100% 58%, 100% 69%, 100% 86%, 100% 89.5%;
+  /* TWO independent animations on the same element:
+       jitter   — transform-only, shakes the whole layer every 45ms.
+       scramble — background-position-only, snaps every strike's y to a
+                  shuffled position every 90ms. Each y value is only ever
+                  swapped within its own group (normal-L, normal-R,
+                  medium-L, medium-R, ultra-L, ultra-R), so left strikes
+                  stay on the left, thicknesses stay matched to the same
+                  y rows class, and the overall visual density is
+                  preserved while individual strikes appear to teleport
+                  between rows like a glitch frame shift. */
+  animation:
+    hero-intro-return-vignette-jitter 90ms steps(2) infinite,
+    hero-intro-return-vignette-scramble 270ms infinite;
+}
+
+/* Invert strobe — solid white surface placed on top of every other
+   intro layer with mix-blend-mode: difference. Where its alpha is on,
+   the underlying composite gets colour-inverted (white ↔ black, so the
+   white scanlines flip to black, the black strikes flip to white, the
+   black curtain flashes white, etc.). Two short OPACITY snaps per 200ms
+   cycle (≈ 16 ms each) read as a glitch flicker rather than a sustained
+   inversion. Gated on --intro-return-glitch so the strobe only runs
+   during stage 4, fading out as close-in starts to take the screen to
+   solid black. */
+.hero-intro__invert {
+  background: #fff;
+  mix-blend-mode: difference;
+  opacity: 0;
+  animation: hero-intro-invert-flicker 450ms steps(1) infinite;
+}
+
+@keyframes hero-intro-invert-flicker {
+  0%,
+  92% {
+    opacity: 0;
+  }
+  92.01%,
+  95% {
+    opacity: var(--intro-return-glitch, 0);
+  }
+  95.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes hero-intro-return-vignette-jitter {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1.03);
+  }
+  50% {
+    transform: translate(-5px, 4px) scale(1.07);
+  }
+}
+
+/* Scramble — discrete-step shuffle of every strike's y position between
+   3 states. The y values only rotate INSIDE each group, so the density
+   profile is preserved while individual strikes teleport between rows.
+   Layer order MUST match the background-image declaration order:
+     6 soft fades + 8 NL + 8 NR + 3 ML + 3 MR + 12 UL + 12 UR = 52. */
+@keyframes hero-intro-return-vignette-scramble {
+  0%,
+  33% {
+    background-position:
+      0 0, 0 0, 0 0, 0 0, 0 0, 0 0,
+      0% 3%, 0% 16%, 0% 29%, 0% 37%, 0% 58%, 0% 67%, 0% 81%, 0% 94%,
+      100% 7%, 100% 21%, 100% 39%, 100% 51%, 100% 62%, 100% 74%, 100% 84%, 100% 91%,
+      0% 23%, 0% 43%, 0% 72%,
+      100% 13%, 100% 47%, 100% 78%,
+      0% 5%, 0% 9%, 0% 12.5%, 0% 18%, 0% 20.5%, 0% 26%, 0% 33.5%, 0% 40%, 0% 46.5%, 0% 53%, 0% 60.5%, 0% 76.5%,
+      100% 4%, 100% 10.5%, 100% 15%, 100% 27%, 100% 30.5%, 100% 35%, 100% 44%, 100% 54.5%, 100% 58%, 100% 69%, 100% 86%, 100% 89.5%;
+  }
+  33.01%,
+  66% {
+    background-position:
+      0 0, 0 0, 0 0, 0 0, 0 0, 0 0,
+      0% 37%, 0% 58%, 0% 67%, 0% 81%, 0% 94%, 0% 3%, 0% 16%, 0% 29%,
+      100% 39%, 100% 51%, 100% 62%, 100% 74%, 100% 84%, 100% 91%, 100% 7%, 100% 21%,
+      0% 43%, 0% 72%, 0% 23%,
+      100% 47%, 100% 78%, 100% 13%,
+      0% 20.5%, 0% 26%, 0% 33.5%, 0% 40%, 0% 46.5%, 0% 53%, 0% 60.5%, 0% 76.5%, 0% 5%, 0% 9%, 0% 12.5%, 0% 18%,
+      100% 35%, 100% 44%, 100% 54.5%, 100% 58%, 100% 69%, 100% 86%, 100% 89.5%, 100% 4%, 100% 10.5%, 100% 15%, 100% 27%, 100% 30.5%;
+  }
+  66.01%,
+  100% {
+    background-position:
+      0 0, 0 0, 0 0, 0 0, 0 0, 0 0,
+      0% 81%, 0% 94%, 0% 3%, 0% 16%, 0% 29%, 0% 37%, 0% 58%, 0% 67%,
+      100% 74%, 100% 84%, 100% 91%, 100% 7%, 100% 21%, 100% 39%, 100% 51%, 100% 62%,
+      0% 72%, 0% 23%, 0% 43%,
+      100% 78%, 100% 13%, 100% 47%,
+      0% 53%, 0% 60.5%, 0% 76.5%, 0% 5%, 0% 9%, 0% 12.5%, 0% 18%, 0% 20.5%, 0% 26%, 0% 33.5%, 0% 40%, 0% 46.5%,
+      100% 58%, 100% 69%, 100% 86%, 100% 89.5%, 100% 4%, 100% 10.5%, 100% 15%, 100% 27%, 100% 30.5%, 100% 35%, 100% 44%, 100% 54.5%;
+  }
+}
+
+.hero-intro__title-scan::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 32%;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(170, 225, 255, 0.45) 28%,
+    rgba(235, 250, 255, 0.92) 48%,
+    rgba(255, 255, 255, 1.00) 50%,
+    rgba(235, 250, 255, 0.92) 52%,
+    rgba(170, 225, 255, 0.45) 72%,
+    transparent 100%
+  );
+  animation: hero-intro-title-scan-sweep 0.62s ease-in-out;
+  animation-delay: 1.72s;
+  animation-fill-mode: both;
+  will-change: transform;
+}
+
+@keyframes hero-intro-title-scan-sweep {
+  0%   { transform: translateY(-140%); }
+  100% { transform: translateY(420%); }
+}
+
+@keyframes hero-intro-scan-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2px); }
+}
+
+@keyframes hero-intro-return-shudder {
+  0%   { transform: translate3d(0, 0, 0); }
+  25%  { transform: translate3d(-9px, 3px, 0); }
+  50%  { transform: translate3d(11px, -4px, 0); }
+  75%  { transform: translate3d(-7px, 2px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes hero-intro-return-burst {
+  0%   { transform: translate3d(0, 0, 0) skewX(0deg); }
+  30%  { transform: translate3d(12px, -3px, 0) skewX(-2deg); }
+  60%  { transform: translate3d(-10px, 4px, 0) skewX(2deg); }
+  100% { transform: translate3d(0, 0, 0) skewX(0deg); }
+}
+
+/* Full-screen overexposure. `screen` blend + opaque white collapses underlying
+   pixels to white → instant uniform viewport bloom with no circular hotspot. */
+.hero-intro__flash {
+  opacity: var(--intro-flash, 0);
+  mix-blend-mode: screen;
+  background: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-intro { display: none; }
+}

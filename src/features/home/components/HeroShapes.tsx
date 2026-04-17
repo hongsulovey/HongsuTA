@@ -7,6 +7,7 @@ import {
   BoxGeometry,
   BufferGeometry,
   CanvasTexture,
+  Color,
   EdgesGeometry,
   Float32BufferAttribute,
   IcosahedronGeometry,
@@ -14,6 +15,7 @@ import {
   OctahedronGeometry,
   SphereGeometry,
   TetrahedronGeometry,
+  Vector3,
 } from "three";
 import type {
   Group,
@@ -59,6 +61,46 @@ const SHAPES: ShapeDef[] = [
   { kind: "icosa", x: 0.2, y: -2.0, z: 1.3, size: 0.4, rotSpeed: [0.18, 0.22, 0.06], phase: 12.4, driftX: 0.22, driftY: 0.2, color: "#65e0ff", tone: "cyan" },
   { kind: "octa", x: 3.2, y: -2.0, z: 0.8, size: 0.38, rotSpeed: [0.16, 0.24, 0], phase: 13.1, driftX: 0.22, driftY: 0.22, color: "#9ec0ff", tone: "white" },
 ];
+
+// ──────────────────────────────────────────────────────────
+// Depth-based color attenuation (RGB only — no extra opacity passes).
+//
+// World distance → camera (each frame, after drift) is normalised against a
+// band derived from `SHAPES` so the full near→far spread of this layout hits
+// the curve (fixed [2.85, 6.35] was too wide, so everything looked same-bright).
+// Gamma + low FAR tint: far small shapes read clearly darker than near ones.
+const DEPTH_CAM = new Vector3(0, 0, 5);
+const DEPTH_FAR_TINT = 0.07;
+const DEPTH_NEAR_TINT = 1.0;
+const DEPTH_PROXIMITY_GAMMA = 1.72;
+
+const BASE_CYAN = new Color("#5af0ff");
+const BASE_MAGENTA = new Color("#ff5ac8");
+
+/** Min/max camera distance for SHAPES at rest; padded for float drift + fitScale. */
+const SHAPE_DEPTH_SPAN = (() => {
+  let minD = Infinity;
+  let maxD = 0;
+  for (const s of SHAPES) {
+    const d = new Vector3(s.x, s.y, s.z).distanceTo(DEPTH_CAM);
+    minD = Math.min(minD, d);
+    maxD = Math.max(maxD, d);
+  }
+  // Tighter band than before so real shape distances use more of [0,1]
+  // proximity (stronger 농도 차). Drift is only ~0.2 world z.
+  const margin = 0.52;
+  const min = Math.max(1.15, minD - margin);
+  const max = maxD + margin * 0.85;
+  return { min, max: Math.max(min + 0.28, max) };
+})();
+
+function depthTintFromDist(dist: number): number {
+  const span = Math.max(1e-3, SHAPE_DEPTH_SPAN.max - SHAPE_DEPTH_SPAN.min);
+  const raw = (dist - SHAPE_DEPTH_SPAN.min) / span;
+  const proximity = 1 - Math.max(0, Math.min(1, raw));
+  const curved = Math.pow(proximity, DEPTH_PROXIMITY_GAMMA);
+  return DEPTH_FAR_TINT + (DEPTH_NEAR_TINT - DEPTH_FAR_TINT) * curved;
+}
 
 const HLSL_TOKENS = [
   "float4",
@@ -274,6 +316,7 @@ type FloatingShapeProps = {
 };
 
 function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
+  const { camera } = useThree();
   const groupRef = useRef<Group>(null);
   const mainRef = useRef<Mesh>(null);
   const pointsRef = useRef<Points>(null);
@@ -289,6 +332,26 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
   const vertices = useMemo(() => shapeVertices(shape.kind, shape.size), [shape.kind, shape.size]);
 
   const edgeHalves = useMemo(() => splitEdges(shape.kind, shape.size), [shape.kind, shape.size]);
+
+  const baseMain = useMemo(() => new Color(shape.color), [shape.color]);
+  const scratch = useMemo(() => new Color(), []);
+  const worldPos = useMemo(() => new Vector3(), []);
+  const depthTintBucketRef = useRef(-1);
+
+  const initialDist = useMemo(
+    () => new Vector3(shape.x, shape.y, shape.z).distanceTo(DEPTH_CAM),
+    [shape.x, shape.y, shape.z]
+  );
+  const initialFactor = useMemo(() => depthTintFromDist(initialDist), [initialDist]);
+
+  const initialTintHex = useMemo(() => {
+    const f = initialFactor;
+    return {
+      main: `#${baseMain.clone().multiplyScalar(f).getHexString()}`,
+      cyan: `#${BASE_CYAN.clone().multiplyScalar(f).getHexString()}`,
+      magenta: `#${BASE_MAGENTA.clone().multiplyScalar(f).getHexString()}`,
+    };
+  }, [baseMain, initialFactor]);
 
   useEffect(() => {
     return () => {
@@ -341,6 +404,39 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
     g.position.x += (baseX - g.position.x) * 0.06;
     g.position.y += (baseY - g.position.y) * 0.06;
     g.position.z += (baseZ - g.position.z) * 0.06;
+
+    g.updateMatrixWorld(true);
+    g.getWorldPosition(worldPos);
+    const factor = depthTintFromDist(worldPos.distanceTo(camera.position));
+    const bucket = Math.round(factor * 120);
+    if (bucket !== depthTintBucketRef.current) {
+      depthTintBucketRef.current = bucket;
+
+      scratch.copy(baseMain).multiplyScalar(factor);
+      const mainMat = mainRef.current?.material as MeshBasicMaterial | undefined;
+      if (mainMat) mainMat.color.copy(scratch);
+
+      const pointsMat = pointsRef.current?.material as PointsMaterial | undefined;
+      if (pointsMat) pointsMat.color.copy(scratch);
+
+      scratch.copy(BASE_CYAN).multiplyScalar(factor);
+      cyanGroupRef.current?.children.forEach((child) => {
+        const mat = (child as LineSegments).material as LineBasicMaterial;
+        mat.color.copy(scratch);
+      });
+
+      scratch.copy(BASE_MAGENTA).multiplyScalar(factor);
+      magentaGroupRef.current?.children.forEach((child) => {
+        const mat = (child as LineSegments).material as LineBasicMaterial;
+        mat.color.copy(scratch);
+      });
+
+      scratch.copy(baseMain).multiplyScalar(factor);
+      spritesGroupRef.current?.children.forEach((child) => {
+        const mat = (child as Sprite).material as SpriteMaterial;
+        mat.color.copy(scratch);
+      });
+    }
 
     const currentScale = g.scale.x;
     const nextScale = currentScale + (1 - currentScale) * 0.1;
@@ -422,10 +518,10 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
 
   return (
     <group ref={groupRef} position={[shape.x, shape.y, shape.z]}>
-      <mesh ref={mainRef}>
+      <mesh ref={mainRef} frustumCulled={false}>
         <ShapeMesh kind={shape.kind} size={shape.size} />
         <meshBasicMaterial
-          color={shape.color}
+          color={initialTintHex.main}
           wireframe
           transparent
           opacity={0.95}
@@ -433,11 +529,11 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
           depthWrite={false}
         />
       </mesh>
-      <points ref={pointsRef} visible={false}>
+      <points ref={pointsRef} visible={false} frustumCulled={false}>
         <ShapeMesh kind={shape.kind} size={shape.size} />
         <pointsMaterial
-          color={shape.color}
-          size={shape.size * 0.14}
+          color={initialTintHex.main}
+          size={shape.size * 0.07}
           sizeAttenuation
           transparent
           opacity={0}
@@ -446,20 +542,20 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
         />
       </points>
       <group ref={cyanGroupRef}>
-        <lineSegments>
+        <lineSegments frustumCulled={false}>
           <primitive object={edgeHalves.halfA} attach="geometry" />
           <lineBasicMaterial
-            color="#5af0ff"
+            color={initialTintHex.cyan}
             transparent
             opacity={0.55}
             blending={AdditiveBlending}
             depthWrite={false}
           />
         </lineSegments>
-        <lineSegments ref={cyanSharedRef}>
+        <lineSegments ref={cyanSharedRef} frustumCulled={false}>
           <primitive object={edgeHalves.halfB} attach="geometry" />
           <lineBasicMaterial
-            color="#5af0ff"
+            color={initialTintHex.cyan}
             transparent
             opacity={0.55}
             blending={AdditiveBlending}
@@ -468,20 +564,20 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
         </lineSegments>
       </group>
       <group ref={magentaGroupRef}>
-        <lineSegments>
+        <lineSegments frustumCulled={false}>
           <primitive object={edgeHalves.halfB} attach="geometry" />
           <lineBasicMaterial
-            color="#ff5ac8"
+            color={initialTintHex.magenta}
             transparent
             opacity={0.5}
             blending={AdditiveBlending}
             depthWrite={false}
           />
         </lineSegments>
-        <lineSegments ref={magentaSharedRef}>
+        <lineSegments ref={magentaSharedRef} frustumCulled={false}>
           <primitive object={edgeHalves.halfA} attach="geometry" />
           <lineBasicMaterial
-            color="#ff5ac8"
+            color={initialTintHex.magenta}
             transparent
             opacity={0.5}
             blending={AdditiveBlending}
@@ -494,6 +590,7 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
           <sprite key={index} position={vertex} scale={spriteScale}>
             <spriteMaterial
               map={textures[index]}
+              color={initialTintHex.main}
               transparent
               depthWrite={false}
               opacity={0}

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="Bloom pipeline redesign placeholder">
+  <rect width="1280" height="720" fill="#0b0f17"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#e6ecff">
+    <text x="60" y="80" font-size="28" font-weight="700">Bloom Path Redesign</text>
+    <text x="60" y="108" font-size="16" fill="#9ec9ff" opacity="0.8">Downsample + Threshold · tonemap /Ä ¬0X</text>
+  </g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#cdd6ff">
+    <g transform="translate(60 200)">
+      <text x="0" y="0" font-size="18" fill="#ff7eb6">BEFORE</text>
+      <g transform="translate(0 30)">
+        <rect x="0" y="0" width="160" height="56" rx="8" fill="none" stroke="#4a86c6"/>
+        <text x="80" y="34" text-anchor="middle">HDR</text>
+        <rect x="180" y="0" width="160" height="56" rx="8" fill="none" stroke="#4a86c6"/>
+        <text x="260" y="34" text-anchor="middle">Blur x5</text>
+        <rect x="360" y="0" width="160" height="56" rx="8" fill="none" stroke="#4a86c6"/>
+        <text x="440" y="34" text-anchor="middle">Blur x5</text>
+        <rect x="540" y="0" width="160" height="56" rx="8" fill="none" stroke="#4a86c6"/>
+        <text x="620" y="34" text-anchor="middle">Combine</text>
+        <rect x="720" y="0" width="160" height="56" rx="8" fill="none" stroke="#ff7eb6"/>
+        <text x="800" y="34" text-anchor="middle">Tonemap</text>
+        <g stroke="#4a86c6" stroke-width="2" fill="none">
+          <path d="M160 28 L180 28"/>
+          <path d="M340 28 L360 28"/>
+          <path d="M520 28 L540 28"/>
+          <path d="M700 28 L720 28"/>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(60 420)">
+      <text x="0" y="0" font-size="18" fill="#9cffb0">AFTER</text>
+      <g transform="translate(0 30)">
+        <rect x="0" y="0" width="160" height="56" rx="8" fill="none" stroke="#4a86c6"/>
+        <text x="80" y="34" text-anchor="middle">HDR</text>
+        <rect x="180" y="0" width="160" height="56" rx="8" fill="none" stroke="#4a86c6"/>
+        <text x="260" y="34" text-anchor="middle">Downsample</text>
+        <rect x="360" y="0" width="160" height="56" rx="8" fill="none" stroke="#9cffb0"/>
+        <text x="440" y="34" text-anchor="middle">Threshold</text>
+        <rect x="540" y="0" width="160" height="56" rx="8" fill="none" stroke="#ff7eb6"/>
+        <text x="620" y="34" text-anchor="middle">Tonemap</text>
+        <g stroke="#4a86c6" stroke-width="2" fill="none">
+          <path d="M160 28 L180 28"/>
+          <path d="M340 28 L360 28"/>
+          <path d="M520 28 L540 28"/>
+        </g>
+      </g>
+    </g>
+  </g>
+  <text x="60" y="680" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#6ea8ff" opacity="0.85">[ placeholder  ä t|x ät´ø¨ / ¡˜\ P´ ]</text>
+</svg>

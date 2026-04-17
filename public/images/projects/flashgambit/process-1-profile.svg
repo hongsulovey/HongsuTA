@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="GPU frame profile placeholder">
+  <rect width="1280" height="720" fill="#0b0f17"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#9ec9ff">
+    <text x="60" y="80" font-size="28" font-weight="700" fill="#e6ecff">GPU Frame Capture</text>
+    <text x="60" y="112" font-size="16" opacity="0.7">RenderDoc ∑ target device ∑ 1 frame</text>
+  </g>
+  <g transform="translate(60 180)">
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#cdd6ff">
+      <text x="0" y="20">Opaque</text>
+      <text x="0" y="80">Transparent</text>
+      <text x="0" y="140">Post ∑ Bloom</text>
+      <text x="0" y="200">Post ∑ Tonemap</text>
+      <text x="0" y="260">UI</text>
+    </g>
+    <g transform="translate(200 0)">
+      <rect x="0" y="6" width="180" height="22" fill="#3a6ea8"/>
+      <rect x="0" y="66" width="240" height="22" fill="#4a86c6"/>
+      <rect x="0" y="126" width="720" height="22" fill="#ff7eb6"/>
+      <rect x="0" y="186" width="120" height="22" fill="#4a86c6"/>
+      <rect x="0" y="246" width="160" height="22" fill="#6a8dd2"/>
+    </g>
+    <g transform="translate(200 0)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#ffd5ea">
+      <text x="730" y="142">ê ¸ (¿</text>
+    </g>
+  </g>
+  <text x="60" y="640" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#6ea8ff" opacity="0.85">[ placeholder  ‰ RenderDoc / AGI °ò t¯¿\ P¥ ]</text>
+</svg>

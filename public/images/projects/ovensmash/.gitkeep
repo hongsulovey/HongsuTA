@@ -1,0 +1,7 @@
+# OvenSmash media folder
+# 여기에 실제 이미지 / gif / mp4 파일을 넣으세요.
+# 추천 파일명 (projects.ts 주석의 경로와 일치시키면 됨):
+#   hero.jpg            (또는 hero.svg / hero.mp4)
+#   step-1.jpg ~ step-N.jpg
+#   before.jpg / after.jpg
+#   screen-1.jpg, reel.mp4 ...

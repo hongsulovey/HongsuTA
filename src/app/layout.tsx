@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { HeroNav } from "@/features/home/components/HeroNav";
 import "./globals.css";
+import "./hero-intro.css";
 
 export const metadata: Metadata = {
   title: "Hongsu Portfolio",

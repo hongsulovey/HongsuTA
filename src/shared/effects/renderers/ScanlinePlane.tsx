@@ -164,13 +164,15 @@ export function ScanlinePlane({ progress, config }: EffectRendererProps) {
   });
 
   return (
-    <mesh scale={[viewport.width, viewport.height, 1]}>
+    <mesh scale={[viewport.width, viewport.height, 1]} renderOrder={-1000}>
       <planeGeometry args={[2, 2]} />
       <shaderMaterial
         ref={materialRef}
         fragmentShader={fragmentShader}
         vertexShader={vertexShader}
         uniforms={uniforms}
+        depthTest={false}
+        depthWrite={false}
       />
     </mesh>
   );

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Bloom cost before">
+  <rect width="960" height="540" fill="#130a18"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#ffd5ea">
+    <text x="40" y="60" font-size="22" font-weight="700">BEFORE · Bloom cost</text>
+    <text x="40" y="88" font-size="14" opacity="0.7">1 frame · target device</text>
+  </g>
+  <g transform="translate(40 140)">
+    <rect x="0" y="0" width="880" height="60" fill="#3a1626"/>
+    <rect x="0" y="0" width="820" height="60" fill="#ff4f86"/>
+    <text x="820" y="95" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="42" font-weight="800" fill="#ff99bd" text-anchor="end">14.0 ms</text>
+  </g>
+  <text x="40" y="520" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#ff7eb6" opacity="0.85">[ placeholder  ä bloom D© ! tøÀ\ P´ ]</text>
+</svg>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Particle count before">
+  <rect width="960" height="540" fill="#130a18"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#ffd5ea">
+    <text x="40" y="60" font-size="22" font-weight="700">BEFORE · Particles / skill</text>
+  </g>
+  <g transform="translate(40 110)">
+    <g fill="#ff4f86">
+      <!-- Dense dots field ~ 256 -->
+      <g id="dotA"><circle r="3.5"/></g>
+    </g>
+  </g>
+  <g fill="#ff4f86" opacity="0.9">
+    <!-- Procedural-looking dot grid -->
+    <g transform="translate(60 150)">
+      <g id="row">
+        <circle cx="10" cy="10" r="3"/><circle cx="30" cy="10" r="3"/><circle cx="50" cy="10" r="3"/>
+        <circle cx="70" cy="10" r="3"/><circle cx="90" cy="10" r="3"/><circle cx="110" cy="10" r="3"/>
+        <circle cx="130" cy="10" r="3"/><circle cx="150" cy="10" r="3"/><circle cx="170" cy="10" r="3"/>
+        <circle cx="190" cy="10" r="3"/><circle cx="210" cy="10" r="3"/><circle cx="230" cy="10" r="3"/>
+        <circle cx="250" cy="10" r="3"/><circle cx="270" cy="10" r="3"/><circle cx="290" cy="10" r="3"/>
+        <circle cx="310" cy="10" r="3"/><circle cx="330" cy="10" r="3"/><circle cx="350" cy="10" r="3"/>
+        <circle cx="370" cy="10" r="3"/><circle cx="390" cy="10" r="3"/><circle cx="410" cy="10" r="3"/>
+        <circle cx="430" cy="10" r="3"/><circle cx="450" cy="10" r="3"/><circle cx="470" cy="10" r="3"/>
+        <circle cx="490" cy="10" r="3"/><circle cx="510" cy="10" r="3"/><circle cx="530" cy="10" r="3"/>
+        <circle cx="550" cy="10" r="3"/><circle cx="570" cy="10" r="3"/><circle cx="590" cy="10" r="3"/>
+        <circle cx="610" cy="10" r="3"/><circle cx="630" cy="10" r="3"/>
+      </g>
+      <use href="#row" y="20"/><use href="#row" y="40"/><use href="#row" y="60"/>
+      <use href="#row" y="80"/><use href="#row" y="100"/><use href="#row" y="120"/>
+      <use href="#row" y="140"/><use href="#row" y="160"/><use href="#row" y="180"/>
+      <use href="#row" y="200"/><use href="#row" y="220"/><use href="#row" y="240"/>
+      <use href="#row" y="260"/><use href="#row" y="280"/><use href="#row" y="300"/>
+    </g>
+  </g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="42" font-weight="800" fill="#ff99bd">
+    <text x="920" y="500" text-anchor="end">~512 pcs</text>
+  </g>
+</svg>

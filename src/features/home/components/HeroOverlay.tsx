@@ -7,10 +7,17 @@ import { useUiHoverTrigger } from "@/shared/hooks/useUiHoverTrigger";
 
 type HeroOverlayProps = {
   hovered?: boolean;
+  /**
+   * Optional title lines. Defaults to the static `homeContent.headlineLines`.
+   * HeroSection passes the currently-cycling variant here; when the array
+   * flips the inner `AnimatedLine`s key-change and replay the scramble glitch.
+   */
+  lines?: string[];
 };
 
-export function HeroOverlay({ hovered = false }: HeroOverlayProps) {
+export function HeroOverlay({ hovered = false, lines }: HeroOverlayProps) {
   const hoverProps = useUiHoverTrigger();
+  const titleLines = lines ?? homeContent.headlineLines;
 
   return (
     <div className="hero-overlay">
@@ -19,7 +26,7 @@ export function HeroOverlay({ hovered = false }: HeroOverlayProps) {
           {homeContent.role}
         </p>
         <HeroAnimatedTitle
-          lines={homeContent.headlineLines}
+          lines={titleLines}
           className="hero-overlay__title"
           startDelayMs={260}
           lineStaggerMs={220}
@@ -27,6 +34,12 @@ export function HeroOverlay({ hovered = false }: HeroOverlayProps) {
         />
         <p className="muted hero-overlay__tagline hero-fade-up" style={{ animationDelay: "620ms" }}>
           {homeContent.tagline}
+        </p>
+        <p
+          className="muted hero-overlay__subtagline hero-fade-up"
+          style={{ animationDelay: "690ms" }}
+        >
+          {homeContent.subTagline}
         </p>
         <div className="hero-overlay__actions hero-fade-up glitch-cluster" style={{ animationDelay: "760ms" }}>
           <Link
