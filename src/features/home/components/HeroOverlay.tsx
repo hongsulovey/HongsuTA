@@ -1,23 +1,49 @@
-import Link from "next/link";
-import { homeContent } from "@/features/home/data/homeContent";
+"use client";
 
-export function HeroOverlay() {
+import Link from "next/link";
+import { HeroAnimatedTitle } from "@/features/home/components/HeroAnimatedTitle";
+import { homeContent } from "@/features/home/data/homeContent";
+import { useUiHoverTrigger } from "@/shared/hooks/useUiHoverTrigger";
+
+type HeroOverlayProps = {
+  hovered?: boolean;
+};
+
+export function HeroOverlay({ hovered = false }: HeroOverlayProps) {
+  const hoverProps = useUiHoverTrigger();
+
   return (
-    <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-      <div style={{ width: "min(720px, 90%)", textAlign: "center" }}>
-        <p className="muted" style={{ marginBottom: 8 }}>
+    <div className="hero-overlay">
+      <div className="hero-overlay__content">
+        <p className="muted hero-overlay__eyebrow hero-fade-up" style={{ animationDelay: "120ms" }}>
           {homeContent.role}
         </p>
-        <h1 style={{ fontSize: "clamp(2rem, 6vw, 4rem)", margin: 0 }}>{homeContent.name}</h1>
-        <p className="muted" style={{ marginTop: 12 }}>
+        <HeroAnimatedTitle
+          lines={homeContent.headlineLines}
+          className="hero-overlay__title"
+          startDelayMs={260}
+          lineStaggerMs={220}
+          hovered={hovered}
+        />
+        <p className="muted hero-overlay__tagline hero-fade-up" style={{ animationDelay: "620ms" }}>
           {homeContent.tagline}
         </p>
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 18 }}>
-          <Link href="/projects/ovensmash-rendering" className="btn">
-            View Project
+        <div className="hero-overlay__actions hero-fade-up" style={{ animationDelay: "760ms" }}>
+          <Link
+            href="/projects"
+            className="btn hero-glass-button hero-glitch-hover"
+            data-text="View Projects"
+            {...hoverProps}
+          >
+            <span className="hero-glitch-hover__label">View Projects</span>
           </Link>
-          <Link href="/contact" className="btn">
-            Contact
+          <Link
+            href="/contact"
+            className="btn hero-glass-button hero-glitch-hover"
+            data-text="Contact"
+            {...hoverProps}
+          >
+            <span className="hero-glitch-hover__label">Contact</span>
           </Link>
         </div>
       </div>

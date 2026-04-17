@@ -6,7 +6,9 @@ export function SelectedProjectsSection() {
     <section className="section">
       <div className="container">
         <h2>Selected Projects</h2>
-        <p className="muted">핵심 프로젝트 2~4개를 먼저 집중적으로 보여주세요.</p>
+        <p className="muted">
+          렌더링, 셰이더, 최적화 맥락이 드러나는 작업을 우선 배치해 기술적 기여가 보이도록 구성했습니다.
+        </p>
         <div className="card-grid" style={{ marginTop: 16 }}>
           {projects.map((project) => (
             <article key={project.slug} className="card">

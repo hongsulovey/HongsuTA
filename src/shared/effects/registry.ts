@@ -1,12 +1,11 @@
-import type { EffectKey } from "@/shared/effects/types";
-
-type EffectRenderer = () => null;
+import { ScanlinePlane } from "@/shared/effects/renderers/ScanlinePlane";
+import type { EffectKey, EffectRenderer } from "@/shared/effects/types";
 
 const noopEffect: EffectRenderer = () => null;
 
 export const effectRegistry: Record<EffectKey, EffectRenderer> = {
   glitch: noopEffect,
-  scanline: noopEffect,
+  scanline: ScanlinePlane,
   rgbShift: noopEffect,
   dissolve: noopEffect,
 };
