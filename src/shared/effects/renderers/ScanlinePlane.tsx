@@ -23,6 +23,8 @@ const fragmentShader = `
   uniform float uSpeed;
   uniform float uHighlight;
   uniform vec2 uPointer;
+  uniform float uPulse;
+  uniform vec2 uPulsePointer;
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -84,22 +86,30 @@ const fragmentShader = `
     float glitchShift = (noise(vec2(curved.y * 28.0, t * 1.4)) - 0.5) * 0.03 * uHighlight;
     curved.x += glitchShift;
 
-    // 4) RGB split (chromatic aberration), stronger on hover and at screen edges
+    // 4) Radial burst distortion on click pulse
+    vec2 pulseDelta = curved - uPulsePointer;
+    float pulseDistance = length(pulseDelta * vec2(1.0, 1.18));
+    float pulseMask = smoothstep(0.16, 0.0, pulseDistance) * uPulse;
+    curved += normalize(pulseDelta + vec2(1e-5)) * pulseMask * 0.014;
+
+    // 5) RGB split (chromatic aberration), stronger on hover and at screen edges
     vec2 cc = uv - 0.5;
     float edge = length(cc);
-    float split = 0.0035 + edge * 0.006 + uHighlight * 0.012;
+    float split = 0.0035 + edge * 0.006 + uHighlight * 0.012 + pulseMask * 0.008;
 
     vec3 color;
     color.r = sampleScene(curved + vec2( split, 0.0)).r;
     color.g = sampleScene(curved).g;
     color.b = sampleScene(curved - vec2( split, 0.0)).b;
 
-    // 5) Beyond-curve mask (black border outside CRT)
+    color += vec3(0.14, 0.18, 0.3) * pulseMask * 0.22;
+
+    // 6) Beyond-curve mask (black border outside CRT)
     vec2 outside = max(vec2(0.0), abs(curved - 0.5) - 0.5);
     float offBounds = step(0.0001, length(outside));
     color *= 1.0 - offBounds;
 
-    // 6) Edge vignette (stronger on corners from barrel)
+    // 7) Edge vignette (stronger on corners from barrel)
     float edgeMask = smoothstep(0.36, 0.92, length(cc));
     color *= 1.0 - edgeMask * 0.72;
 
@@ -111,6 +121,9 @@ export function ScanlinePlane({ progress, config }: EffectRendererProps) {
   const materialRef = useRef<ShaderMaterial>(null);
   const viewport = useThree((state) => state.viewport);
 
+  // Mount-once uniforms. Values are mutated in-place inside useFrame so we
+  // never re-bind the uniform map on the GPU, and never allocate new arrays
+  // per frame / per pointer move.
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -119,23 +132,35 @@ export function ScanlinePlane({ progress, config }: EffectRendererProps) {
       uSpeed: { value: config.speed ?? 0.7 },
       uHighlight: { value: config.highlight ?? 0 },
       uPointer: { value: [config.pointerX ?? 0.5, config.pointerY ?? 0.42] },
+      uPulse: { value: config.pulse ?? 0 },
+      uPulsePointer: { value: [config.pulseX ?? 0.5, config.pulseY ?? 0.42] },
     }),
-    [config.highlight, config.intensity, config.pointerX, config.pointerY, config.speed, progress]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   useFrame((_, delta) => {
     const material = materialRef.current;
-
     if (!material) {
       return;
     }
 
-    material.uniforms.uTime.value += delta;
-    material.uniforms.uProgress.value = progress;
-    material.uniforms.uIntensity.value = config.intensity ?? 0.16;
-    material.uniforms.uSpeed.value = config.speed ?? 0.7;
-    material.uniforms.uHighlight.value = config.highlight ?? 0;
-    material.uniforms.uPointer.value = [config.pointerX ?? 0.5, config.pointerY ?? 0.42];
+    const u = material.uniforms;
+    u.uTime.value += delta;
+    u.uProgress.value = progress;
+    u.uIntensity.value = config.intensity ?? 0.16;
+    u.uSpeed.value = config.speed ?? 0.7;
+    u.uHighlight.value = config.highlight ?? 0;
+
+    const pointer = u.uPointer.value as number[];
+    pointer[0] = config.pointerX ?? 0.5;
+    pointer[1] = config.pointerY ?? 0.42;
+
+    u.uPulse.value = config.pulse ?? 0;
+
+    const pulsePointer = u.uPulsePointer.value as number[];
+    pulsePointer[0] = config.pulseX ?? 0.5;
+    pulsePointer[1] = config.pulseY ?? 0.42;
   });
 
   return (

@@ -1,4 +1,17 @@
-export const homeContent = {
+export type HomeContent = {
+  name: string;
+  headlineLines: string[];
+  role: string;
+  tagline: string;
+  intro: string;
+  skills: string[];
+  contact: {
+    email: string;
+    github: string;
+  };
+};
+
+export const homeContent: HomeContent = {
   name: "Choi Hongsu",
   headlineLines: ["CHOI", "HONGSU"],
   role: "Technical Artist",

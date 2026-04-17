@@ -21,8 +21,12 @@ export default function ProjectsPage() {
                 </span>
               ))}
             </div>
-            <Link href={`/projects/${project.slug}`} className="btn">
-              상세 보기
+            <Link
+              href={`/projects/${project.slug}`}
+              className="btn hero-glitch-hover"
+              data-text="상세 보기"
+            >
+              <span className="hero-glitch-hover__label">상세 보기</span>
             </Link>
           </article>
         ))}

@@ -15,8 +15,12 @@ export function SelectedProjectsSection() {
               <h3 style={{ marginTop: 0 }}>{project.title}</h3>
               <p className="muted">{project.role}</p>
               <p>{project.summary}</p>
-              <Link href={`/projects/${project.slug}`} className="btn">
-                상세 보기
+              <Link
+                href={`/projects/${project.slug}`}
+                className="btn hero-glitch-hover"
+                data-text="상세 보기"
+              >
+                <span className="hero-glitch-hover__label">상세 보기</span>
               </Link>
             </article>
           ))}

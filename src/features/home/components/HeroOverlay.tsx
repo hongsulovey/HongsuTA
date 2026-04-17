@@ -28,7 +28,7 @@ export function HeroOverlay({ hovered = false }: HeroOverlayProps) {
         <p className="muted hero-overlay__tagline hero-fade-up" style={{ animationDelay: "620ms" }}>
           {homeContent.tagline}
         </p>
-        <div className="hero-overlay__actions hero-fade-up" style={{ animationDelay: "760ms" }}>
+        <div className="hero-overlay__actions hero-fade-up glitch-cluster" style={{ animationDelay: "760ms" }}>
           <Link
             href="/projects"
             className="btn hero-glass-button hero-glitch-hover"
