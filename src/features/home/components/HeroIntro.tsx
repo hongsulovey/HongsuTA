@@ -49,6 +49,7 @@ import { homeContent } from "@/features/home/data/homeContent";
  */
 
 const INTRO_DURATION_MS = 5000;
+const INTRO_UNMOUNT_DELAY_MS = 60;
 
 /** Hermite smoothstep — produces clean ease-in/out between two edges. */
 function smoothstep(edge0: number, edge1: number, x: number) {
@@ -220,20 +221,47 @@ export function HeroIntro({ lines, cycleIndex = 0 }: HeroIntroProps) {
     setIsPlaying(true);
     introVarsPrevRef.current.clear();
 
-    let rafId = 0;
+    let rafId: number | null = null;
     let done = false;
     const start = performance.now();
+    let hiddenAt: number | null = document.hidden ? start : null;
+    let pausedMs = 0;
 
     const finish = () => {
       if (done) return;
       done = true;
       // One extra frame at t=1 is already applied; schedule unmount on next task
       // so React doesn't race with the final style write.
-      window.setTimeout(() => setIsPlaying(false), 60);
+      window.setTimeout(() => setIsPlaying(false), INTRO_UNMOUNT_DELAY_MS);
+    };
+
+    const scheduleTick = () => {
+      if (done || document.hidden || rafId !== null) {
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
     };
 
     const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / INTRO_DURATION_MS);
+      rafId = null;
+      if (done) {
+        return;
+      }
+
+      // 탭이 비가시 상태면 인트로 진행을 멈추고 복귀 시 이어서 재생한다.
+      if (document.hidden) {
+        if (hiddenAt === null) {
+          hiddenAt = now;
+        }
+        return;
+      }
+
+      if (hiddenAt !== null) {
+        pausedMs += now - hiddenAt;
+        hiddenAt = null;
+      }
+
+      const progress = Math.min(1, (now - start - pausedMs) / INTRO_DURATION_MS);
       const stages = computeStages(progress);
 
       const el = rootRef.current;
@@ -242,16 +270,44 @@ export function HeroIntro({ lines, cycleIndex = 0 }: HeroIntroProps) {
       }
 
       if (progress < 1) {
-        rafId = requestAnimationFrame(tick);
+        scheduleTick();
       } else {
         finish();
       }
     };
 
-    rafId = requestAnimationFrame(tick);
+    const handleVisibilityChange = () => {
+      if (done) {
+        return;
+      }
+
+      if (document.hidden) {
+        if (hiddenAt === null) {
+          hiddenAt = performance.now();
+        }
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        return;
+      }
+
+      const now = performance.now();
+      if (hiddenAt !== null) {
+        pausedMs += now - hiddenAt;
+        hiddenAt = null;
+      }
+      scheduleTick();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    scheduleTick();
 
     return () => {
-      cancelAnimationFrame(rafId);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       introVarsPrevRef.current.clear();
     };
   }, []);

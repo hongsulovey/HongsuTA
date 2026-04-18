@@ -18,8 +18,6 @@ export type EffectConfig = {
   intensity?: number;
   speed?: number;
   highlight?: number;
-  pointerX?: number;
-  pointerY?: number;
   pulse?: number;
   pulseX?: number;
   pulseY?: number;

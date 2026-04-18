@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ShaderMaterial } from "three";
 import type { EffectRendererProps } from "@/shared/effects/types";
 
@@ -22,7 +22,6 @@ const fragmentShader = `
   uniform float uIntensity;
   uniform float uSpeed;
   uniform float uHighlight;
-  uniform vec2 uPointer;
   uniform float uPulse;
   uniform vec2 uPulsePointer;
 
@@ -117,50 +116,64 @@ const fragmentShader = `
   }
 `;
 
+const DEFAULT_INTENSITY = 0.16;
+const DEFAULT_SPEED = 0.7;
+const DEFAULT_PULSE_X = 0.5;
+const DEFAULT_PULSE_Y = 0.42;
+
 export function ScanlinePlane({ progress, config }: EffectRendererProps) {
   const materialRef = useRef<ShaderMaterial>(null);
   const viewport = useThree((state) => state.viewport);
 
   // Mount-once uniforms. Values are mutated in-place inside useFrame so we
   // never re-bind the uniform map on the GPU, and never allocate new arrays
-  // per frame / per pointer move.
+  // per frame.
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uProgress: { value: progress },
-      uIntensity: { value: config.intensity ?? 0.16 },
-      uSpeed: { value: config.speed ?? 0.7 },
+      uIntensity: { value: config.intensity ?? DEFAULT_INTENSITY },
+      uSpeed: { value: config.speed ?? DEFAULT_SPEED },
       uHighlight: { value: config.highlight ?? 0 },
-      uPointer: { value: [config.pointerX ?? 0.5, config.pointerY ?? 0.42] },
       uPulse: { value: config.pulse ?? 0 },
-      uPulsePointer: { value: [config.pulseX ?? 0.5, config.pulseY ?? 0.42] },
+      uPulsePointer: { value: [config.pulseX ?? DEFAULT_PULSE_X, config.pulseY ?? DEFAULT_PULSE_Y] },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
-  useFrame((_, delta) => {
+  useEffect(() => {
     const material = materialRef.current;
     if (!material) {
       return;
     }
 
     const u = material.uniforms;
-    u.uTime.value += delta;
     u.uProgress.value = progress;
-    u.uIntensity.value = config.intensity ?? 0.16;
-    u.uSpeed.value = config.speed ?? 0.7;
+    u.uIntensity.value = config.intensity ?? DEFAULT_INTENSITY;
+    u.uSpeed.value = config.speed ?? DEFAULT_SPEED;
     u.uHighlight.value = config.highlight ?? 0;
-
-    const pointer = u.uPointer.value as number[];
-    pointer[0] = config.pointerX ?? 0.5;
-    pointer[1] = config.pointerY ?? 0.42;
-
     u.uPulse.value = config.pulse ?? 0;
 
     const pulsePointer = u.uPulsePointer.value as number[];
-    pulsePointer[0] = config.pulseX ?? 0.5;
-    pulsePointer[1] = config.pulseY ?? 0.42;
+    pulsePointer[0] = config.pulseX ?? DEFAULT_PULSE_X;
+    pulsePointer[1] = config.pulseY ?? DEFAULT_PULSE_Y;
+  }, [
+    progress,
+    config.intensity,
+    config.speed,
+    config.highlight,
+    config.pulse,
+    config.pulseX,
+    config.pulseY,
+  ]);
+
+  useFrame((_, delta) => {
+    const material = materialRef.current;
+    if (!material) {
+      return;
+    }
+    material.uniforms.uTime.value += delta;
   });
 
   return (

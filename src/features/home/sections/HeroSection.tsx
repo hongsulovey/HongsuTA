@@ -13,14 +13,12 @@ import { useUiHoverListener } from "@/shared/hooks/useUiHoverTrigger";
  * Hero section orchestrator.
  *
  * Responsibilities:
- *  - Collects pointer / hover / click state for the hero area.
+ *  - Collects hover / click state for the hero area.
  *  - Passes derived values into the R3F canvas, ambient glyph layer and
  *    DOM overlay. Individual visual systems read from these props and
  *    do not talk to each other directly.
  *
  * Interaction model:
- *  - `pointer`             : normalised (0..1) cursor position inside the section,
- *                            used by shaders for subtle pointer-aware distortion.
  *  - `isTitleHovered`      : raised by nav / buttons / title via `useUiHoverTrigger`;
  *                            drives the glitch-heavy "reactive" state across layers.
  *  - `pulse` / `pulseActive`: emitted when the user left-clicks an empty area of the
@@ -65,7 +63,7 @@ const PULSE_ACTIVE_MS = 680;
 // pulse when clicked (they have their own hover-driven reactions instead).
 const INTERACTIVE_SELECTOR = "a, button, input, textarea, select, label";
 
-const DEFAULT_POINTER = { x: 0.5, y: 0.42 };
+const DEFAULT_PULSE_POINTER = { x: 0.5, y: 0.42 };
 
 // Title loop: alternates between the two variants using the existing
 // scramble + 글리치 루프. Timeline anchored to the 3.0-second hero intro:
@@ -89,6 +87,7 @@ const TITLE_VARIANTS: string[][] = [
 ];
 const FIRST_TITLE_SWAP_MS = 1400;
 const TITLE_SWAP_INTERVAL_MS = 5000;
+const PROGRESS_EPSILON = 0.001;
 // Normalised origin for the programmatic PULSE triggered by each title swap.
 // Roughly aligned with the on-screen title baseline (left-of-centre, upper-mid).
 const TITLE_SWAP_PULSE_ORIGIN = { x: 0.32, y: 0.46 };
@@ -98,15 +97,10 @@ export function HeroSection() {
   const [isTitleHovered, setIsTitleHovered] = useState(false);
   const [isBackgroundPulseActive, setIsBackgroundPulseActive] = useState(false);
   const [pulse, setPulse] = useState<BackgroundPulse | null>(null);
-  const [pointer, setPointer] = useState(DEFAULT_POINTER);
   const [titleCycle, setTitleCycle] = useState(0);
   const sectionRef = useRef<HTMLElement>(null);
   const pulseTimeoutRef = useRef<number | null>(null);
   const pulseKeyRef = useRef(0);
-  // rAF-coalesce pointer updates: pointermove can fire 100-1000Hz on
-  // high-refresh displays, but the shader only needs one update per frame.
-  const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
-  const pointerRafRef = useRef<number | null>(null);
 
   useUiHoverListener(setIsTitleHovered);
 
@@ -114,9 +108,6 @@ export function HeroSection() {
     return () => {
       if (pulseTimeoutRef.current !== null) {
         window.clearTimeout(pulseTimeoutRef.current);
-      }
-      if (pointerRafRef.current !== null) {
-        cancelAnimationFrame(pointerRafRef.current);
       }
     };
   }, []);
@@ -130,7 +121,6 @@ export function HeroSection() {
     pulseKeyRef.current += 1;
     setPulse({ key: pulseKeyRef.current, x, y, clientX, clientY });
     setIsBackgroundPulseActive(true);
-    setPointer({ x, y });
 
     if (pulseTimeoutRef.current !== null) {
       window.clearTimeout(pulseTimeoutRef.current);
@@ -177,28 +167,6 @@ export function HeroSection() {
 
   const isReactive = isTitleHovered || isBackgroundPulseActive;
 
-  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-
-    pendingPointerRef.current = {
-      x: Math.min(1, Math.max(0, x)),
-      y: Math.min(1, Math.max(0, y)),
-    };
-
-    if (pointerRafRef.current !== null) {
-      return;
-    }
-    pointerRafRef.current = requestAnimationFrame(() => {
-      pointerRafRef.current = null;
-      const next = pendingPointerRef.current;
-      if (next) {
-        setPointer(next);
-      }
-    });
-  }, []);
-
   const handleBackgroundPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) {
       return;
@@ -213,27 +181,29 @@ export function HeroSection() {
     triggerBackgroundPulse(event.clientX, event.clientY, rect);
   }, [triggerBackgroundPulse]);
 
-  // Stabilise references passed into the (memo-friendly) HeroCanvas so that
-  // unrelated state flips (hovered / pulseActive) don't invalidate the
-  // pulsePointer object identity and force extra prop-diff work downstream.
+  // Stabilise the pulse origin object passed into HeroCanvas so unrelated
+  // state flips do not force extra prop diffing in downstream memo paths.
   const pulsePointer = useMemo(
-    () => (pulse ? { x: pulse.x, y: pulse.y } : pointer),
-    [pulse, pointer]
+    () => (pulse ? { x: pulse.x, y: pulse.y } : DEFAULT_PULSE_POINTER),
+    [pulse]
   );
   const highlight = isTitleHovered ? 1 : 0;
   const pulseValue = isBackgroundPulseActive ? 1 : 0;
   const titleLines = TITLE_VARIANTS[titleCycle % TITLE_VARIANTS.length];
+  const handleProgressChange = useCallback((nextProgress: number) => {
+    setProgress((prev) =>
+      Math.abs(prev - nextProgress) < PROGRESS_EPSILON ? prev : nextProgress
+    );
+  }, []);
 
   return (
     <section
       ref={sectionRef}
       className="hero-shell"
-      onPointerMove={handlePointerMove}
       onPointerDown={handleBackgroundPointerDown}
     >
       <HeroCanvas
         progress={progress}
-        pointer={pointer}
         highlight={highlight}
         hovered={isTitleHovered}
         pulse={pulseValue}
@@ -243,7 +213,7 @@ export function HeroSection() {
       <div className="hero-shell__shade" />
       <HeroOverlay hovered={isReactive} lines={titleLines} />
       <HeroIntro lines={titleLines} cycleIndex={titleCycle} />
-      <HeroController onProgressChange={setProgress} />
+      <HeroController onProgressChange={handleProgressChange} />
     </section>
   );
 }

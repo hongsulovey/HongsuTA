@@ -102,6 +102,11 @@ function depthTintFromDist(dist: number): number {
   return DEPTH_FAR_TINT + (DEPTH_NEAR_TINT - DEPTH_FAR_TINT) * curved;
 }
 
+function hash01(value: number): number {
+  const x = Math.sin(value) * 43758.5453123;
+  return x - Math.floor(x);
+}
+
 const HLSL_TOKENS = [
   "float4",
   "float3",
@@ -493,6 +498,7 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
     if (sprites) {
       const outwardScale = 0.35 * p;
       const jitterAmount = 0.06 * p;
+      const jitterTick = Math.floor(clock.elapsedTime * 120);
       sprites.children.forEach((child, index) => {
         const sprite = child as Sprite;
         const vertex = vertices[index];
@@ -500,7 +506,8 @@ function FloatingShape({ shape, hovered, pulse }: FloatingShapeProps) {
         const nx = vertex[0] / len;
         const ny = vertex[1] / len;
         const nz = vertex[2] / len;
-        const jitter = jitterAmount * (Math.random() - 0.5);
+        const jitterSeed = jitterTick * 0.61803398875 + index * 12.9898 + shape.phase * 78.233;
+        const jitter = jitterAmount * (hash01(jitterSeed) - 0.5);
 
         sprite.position.set(
           vertex[0] + nx * outwardScale + jitter,
